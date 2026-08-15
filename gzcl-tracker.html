@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>GZCL Tracker</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root { color-scheme: light; }
+  .viz-root {
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --good:           #006300;
+    --series-1:       #2a78d6; /* blue */
+    --series-2:       #eb6834; /* orange */
+    --series-3:       #1baf7a; /* aqua */
+    --series-4:       #eda100; /* yellow */
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --status-critical:#d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --good:           #0ca30c;
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --series-3:       #199e70;
+      --series-4:       #c98500;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page-plane);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding-bottom: 84px;
+  }
+  a { color: inherit; }
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px 10px;
+  }
+  header.top h1 { font-size: 17px; margin: 0 0 2px; font-weight: 700; }
+  header.top .sub { font-size: 12px; color: var(--text-secondary); display:flex; align-items:center; gap:6px; justify-content:space-between; }
+  .syncdot { width:7px; height:7px; border-radius:50%; background: var(--text-muted); flex: none; display:inline-block; }
+  .syncdot.on { background: var(--status-good); }
+  .syncdot.busy { background: var(--status-warning); }
+  .synclabel { font-size:11px; color: var(--text-muted); }
+  nav.tabs {
+    display: flex; gap: 4px; overflow-x: auto;
+    padding: 10px 16px 0; background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 53px; z-index: 20;
+  }
+  nav.tabs button {
+    appearance: none; border: none; background: transparent;
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--text-secondary);
+    padding: 8px 10px 10px; border-bottom: 2px solid transparent; cursor: pointer;
+    white-space: nowrap;
+  }
+  nav.tabs button.active { color: var(--series-1); border-bottom-color: var(--series-1); }
+  main { max-width: 640px; margin: 0 auto; padding: 14px 16px 40px; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px; margin-bottom: 12px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .card h3 { font-size: 13px; margin: 14px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .03em; }
+  .muted { color: var(--text-muted); font-size: 12px; }
+  .secondary { color: var(--text-secondary); font-size: 13px; }
+  .banner {
+    background: color-mix(in srgb, var(--status-warning) 16%, var(--surface-1));
+    border: 1px solid color-mix(in srgb, var(--status-warning) 45%, transparent);
+    border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px;
+    display: flex; gap: 8px; align-items: flex-start;
+  }
+  .banner b { display:block; margin-bottom:2px; }
+  .daypicker { display:flex; align-items:center; gap:8px; margin-bottom: 10px; }
+  .daypicker select {
+    font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  }
+  .pill {
+    display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:99px;
+    background: var(--page-plane); color: var(--text-secondary); border: 1px solid var(--border);
+  }
+  .exblock { border-top: 1px solid var(--gridline); padding-top: 10px; margin-top: 10px; }
+  .exblock:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+  .exhead { display:flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .exname { font-weight: 700; font-size: 14px; }
+  .exname input {
+    font: inherit; font-weight: 700; font-size: 14px; border: none; background: transparent;
+    color: var(--text-primary); width: 100%; padding: 2px 0; border-bottom: 1px dashed transparent;
+  }
+  .exname input:focus { outline: none; border-bottom-color: var(--series-1); }
+  .exmeta { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+  .setgrid { display:flex; flex-direction: column; gap:6px; margin-top:8px; }
+  .setrow { display:flex; align-items:center; gap:8px; }
+  .setrow .setno { width: 20px; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .setrow input[type=number] {
+    font: inherit; font-size: 14px; padding: 8px 9px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary);
+    width: 100%; min-width: 0;
+  }
+  .setrow .x { color: var(--text-muted); font-size: 12px; }
+  .setrow button.rm {
+    border:none; background:transparent; color: var(--text-muted); font-size:16px; cursor:pointer; padding:2px 4px;
+  }
+  .addset {
+    margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--series-1);
+    background: none; border: none; cursor: pointer; padding: 4px 0;
+  }
+  .rpe { display:flex; align-items:center; gap:6px; margin-top:8px; }
+  .rpe input { width: 60px; }
+  .rpe label { font-size:12px; color: var(--text-secondary); }
+  button.primary {
+    display:block; width:100%; margin-top: 14px; padding: 12px; border-radius: 10px; border: none;
+    background: var(--series-1); color: #fff; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+  }
+  button.secondary2 {
+    display:block; width:100%; margin-top: 8px; padding: 10px; border-radius: 10px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-primary);
+    font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  .walkbox { background: var(--page-plane); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 10px; }
+  .histitem { border-bottom: 1px solid var(--gridline); padding: 10px 0; }
+  .histitem:last-child { border-bottom: none; }
+  .histitem .hd { display:flex; justify-content: space-between; font-size: 13px; font-weight:700; }
+  .histitem .hd .date { color: var(--text-secondary); font-weight: 600; }
+  .histitem ul { margin: 6px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-secondary); }
+  .histitem li { margin-bottom: 2px; }
+  .empty { text-align:center; color: var(--text-muted); font-size: 13px; padding: 24px 8px; }
+  table.settbl { width:100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  table.settbl th { text-align:left; font-size: 11px; color: var(--text-muted); font-weight:600; padding-bottom: 6px; }
+  table.settbl td { padding: 6px 4px 6px 0; border-top: 1px solid var(--gridline); }
+  table.settbl input { width: 70px; font: inherit; padding: 5px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary); }
+  .row2 { display:flex; gap:10px; }
+  .row2 > div { flex:1; }
+  .chartlegend { display:flex; flex-wrap:wrap; gap: 10px 14px; margin-top: 8px; }
+  .chartlegend .li { display:flex; align-items:center; gap:6px; font-size: 12px; color: var(--text-secondary); }
+  .chartlegend .sw { width: 10px; height: 10px; border-radius: 3px; display:inline-block; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 11.5px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%,-115%);
+    opacity: 0; transition: opacity .08s; z-index: 5; font-variant-numeric: tabular-nums;
+  }
+  .chartwrap { position: relative; }
+  footer.actions {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface-1);
+    border-top: 1px solid var(--border); padding: 8px 16px calc(10px + env(safe-area-inset-bottom));
+    display: none;
+  }
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--text-primary); color: var(--surface-1); font-size: 13px; font-weight:600;
+    padding: 10px 16px; border-radius: 99px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+  details.substnote { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+  .flag { color: var(--status-serious); font-weight:600; }
+  .backuprow { display:flex; gap:8px; }
+  .backuprow button { flex:1; }
+</style>
+</head>
+<body class="viz-root">
+
+<header class="top">
+  <h1>GZCL Tracker</h1>
+  <div class="sub" id="headerSub">
+    <span>Every-Other-Day Cycle · rolling 8-day schedule</span>
+    <span id="syncIndicator" class="synclabel" style="display:flex; align-items:center; gap:5px;"><span class="syncdot" id="syncDot"></span><span id="syncText">not synced</span></span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="today" class="active">Today</button>
+  <button data-tab="history">History</button>
+  <button data-tab="progress">Progress</button>
+  <button data-tab="program">Program</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+
+<main id="main"></main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================== SYNC STATE (declared early — save()/load() reference these) ============================== */
+const SYNC_KEY = "gzcl_sync_cfg_v1";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_FILE_NAME = "gzcl-tracker-data.json";
+let syncCfg = loadSyncCfg();
+let driveAccessToken = null;
+let tokenClient = null;
+let syncDebounceTimer = null;
+let syncStatus = { connected: false, busy: false, lastError: null };
+
+/* ============================== PROGRAM DEFINITION ============================== */
+const T1_WAVE = [
+  { week: 1, setsLabel: "5x3",   sets: 5, reps: 3, pctLabel: "80–85%", pctMid: 0.825 },
+  { week: 2, setsLabel: "6x2",   sets: 6, reps: 2, pctLabel: "85–90%", pctMid: 0.875 },
+  { week: 3, setsLabel: "8-10x1",sets: 9, reps: 1, pctLabel: "90–95%", pctMid: 0.925 }
+];
+
+const PROGRAM = {
+  1: { name: "Squat Day", type: "lift",
+    tiers: [
+      { tier: "T1", exercise: "Front Squat", key: "frontSquat_T1", scheme: "wave" },
+      { tier: "T2", exercise: "Bench Press", key: "benchPress_T2", scheme: "double", repRange: [8,10], pct: "70–75%" },
+      { tier: "T3", group: [
+        { exercise: "Leg Curls", key: "legCurls_T3", sets: 3, repRange: [12,15] },
+        { exercise: "Walking Lunges", key: "walkingLunges_T3", sets: 3, repsLabel: "10/leg" },
+        { exercise: "Ab Wheel or Weighted Plank", key: "abWheel_T3", sets: 3, repsLabel: "max / 45s" }
+      ]}
+    ]
+  },
+  2: { name: "Assault Bike — Intervals", type: "cardio",
+    protocol: [
+      "Warm-up: 3–5 min easy pedaling",
+      "Intervals: 10–12 rounds of 20 sec hard (RPE 8) / 40 sec easy spin",
+      "Progress toward 30/30, then eventually 1 min on / 1 min off",
+      "Total session: ~15–20 min"
+    ],
+    why: "Placed right after Squat Day, before Bench Day — Squat's fatigue is localized to the quads, and Bench Day doesn't need leg freshness."
+  },
+  3: { name: "Bench Day", type: "lift", t3note: "T3 for this day is on Day 4 (Incline Walk + Bench Day T3).",
+    tiers: [
+      { tier: "T1", exercise: "Incline Bench Press", key: "inclineBench_T1", scheme: "wave" },
+      { tier: "T2", exercise: "Trap Bar Deadlift", key: "trapBarDeadlift_T2", scheme: "double", repRange: [6,8], pct: "70–75%" }
+    ]
+  },
+  4: { name: "Incline Walk + Bench Day T3", type: "walk3",
+    walk: "30–45 min at an incline, conversational pace. Progress by adding duration or incline every couple weeks, not pace.",
+    tiers: [
+      { tier: "T3", group: [
+        { exercise: "Barbell or DB Row", key: "row_T3", sets: 3, repRange: [10,12] },
+        { exercise: "Triceps Pushdown", key: "tricepsPushdown_T3", sets: 3, repRange: [12,15] },
+        { exercise: "DB Curl", key: "dbCurl_T3", sets: 3, repRange: [12,15] }
+      ]}
+    ]
+  },
+  5: { name: "Deadlift Day", type: "lift",
+    tiers: [
+      { tier: "T1", exercise: "Trap Bar Deadlift", key: "trapBarDeadlift_T1", scheme: "wave" },
+      { tier: "T2", exercise: "Zercher Squat", key: "zercherSquat_T2", scheme: "double", repRange: [8,10], pct: "65–70%",
+        note: "New lift — ramp up in weight within the session (a few lighter sets before your top set); give it several sessions before locking into fixed working sets. Ease off if it's sharp or lingers (back sensitivity)." },
+      { tier: "T3", group: [
+        { exercise: "Romanian Deadlift", key: "rdl_T3", sets: 3, repRange: [10,12] },
+        { exercise: "Back Extension", key: "backExt_T3", sets: 3, repRange: [12,15] },
+        { exercise: "Hanging Leg Raise", key: "hangingLegRaise_T3", sets: 3, repRange: [12,15] }
+      ]}
+    ]
+  },
+  6: { name: "Assault Bike — Steady State", type: "cardio",
+    protocol: [
+      "15–20 min continuous, moderate effort (RPE 5–6 — comfortably hard)",
+      "Same purpose as the Incline Walks — aerobic base, different modality",
+      "If Deadlift Day left you more beat up than usual, drop to an easy Incline Walk instead"
+    ],
+    why: "Placed after Deadlift Day since it sits before OHP Day (no leg-freshness demand there) — kept easy since it lands right after your heaviest pull."
+  },
+  7: { name: "OHP Day", type: "lift", t3note: "T3 for this day is on Day 8 (Incline Walk + OHP Day T3).",
+    tiers: [
+      { tier: "T1", exercise: "Overhead Press", key: "ohp_T1", scheme: "wave" },
+      { tier: "T2", exercise: "Close-Grip Bench Press", key: "closeGripBench_T2", scheme: "double", repRange: [8,10], pct: "70–75%" }
+    ]
+  },
+  8: { name: "Incline Walk + OHP Day T3", type: "walk3",
+    walk: "30–45 min at an incline, conversational pace. Progress by adding duration or incline every couple weeks, not pace.",
+    tiers: [
+      { tier: "T3", group: [
+        { exercise: "Lateral Raise", key: "lateralRaise_T3", sets: 3, repRange: [15,20] },
+        { exercise: "Rear Delt Fly", key: "rearDeltFly_T3", sets: 3, repRange: [15,20] },
+        { exercise: "Skullcrusher or Dips", key: "skullcrusher_T3", sets: 3, repRange: [10,12] }
+      ]}
+    ]
+  }
+};
+
+const T1_KEYS = ["frontSquat_T1","inclineBench_T1","trapBarDeadlift_T1","ohp_T1"];
+const T1_COLORS = { frontSquat_T1: "var(--series-1)", inclineBench_T1: "var(--series-2)", trapBarDeadlift_T1: "var(--series-3)", ohp_T1: "var(--series-4)" };
+const T1_LABELS = { frontSquat_T1: "Front Squat", inclineBench_T1: "Incline Bench Press", trapBarDeadlift_T1: "Trap Bar Deadlift", ohp_T1: "Overhead Press" };
+
+/* ============================== STATE / STORAGE ============================== */
+const STORE_KEY = "gzcl_tracker_v1";
+
+function defaultState() {
+  return {
+    cycleDay: 1,
+    cyclesCompleted: 0,
+    deloadEvery: 5,
+    lastDeloadAtCycle: 0,
+    t1: {
+      frontSquat_T1: { trainingMax: 0, wave: 1 },
+      inclineBench_T1: { trainingMax: 0, wave: 1 },
+      trapBarDeadlift_T1: { trainingMax: 0, wave: 1 },
+      ohp_T1: { trainingMax: 0, wave: 1 }
+    },
+    t2: {
+      benchPress_T2: { weight: 0, repTarget: 8 },
+      trapBarDeadlift_T2: { weight: 0, repTarget: 6 },
+      zercherSquat_T2: { weight: 0, repTarget: 8, ramping: true },
+      closeGripBench_T2: { weight: 0, repTarget: 8 }
+    },
+    t3: {},
+    exerciseNameOverride: {},
+    logs: []
+  };
+}
+
+function seedState() {
+  const s = defaultState();
+  s.exerciseNameOverride = {
+    benchPress_T2: "Incline Bench Press",
+    closeGripBench_T2: "Incline Bench Press (Dumbbell)"
+  };
+  s.t1.frontSquat_T1 = { trainingMax: 190, wave: 2 };
+  s.t1.inclineBench_T1 = { trainingMax: 190, wave: 2 };
+  s.t1.trapBarDeadlift_T1 = { trainingMax: 310, wave: 1 };
+  s.t1.ohp_T1 = { trainingMax: 105, wave: 1 };
+
+  s.t2.benchPress_T2 = { weight: 135, repTarget: 8 };
+  s.t2.trapBarDeadlift_T2 = { weight: 190, repTarget: 6 };
+  s.t2.zercherSquat_T2 = { weight: 95, repTarget: 8, ramping: true };
+  s.t2.closeGripBench_T2 = { weight: 40, repTarget: 8 };
+
+  s.cycleDay = 4;
+  s.cyclesCompleted = 0;
+
+  s.logs = [
+    { id: "seed1", date: "2026-08-08", cycleDay: 5, dayName: "Deadlift Day", sourceLabel: "Day 3 (Deadlift/Squat) — imported from Strong",
+      entries: [
+        { tier: "Other", exercise: "Unilateral Leg Extension", sets: [{w:105,r:10},{w:105,r:10}] },
+        { tier: "T1", exercise: "Trap Bar Deadlift", key: "trapBarDeadlift_T1", sets: [{w:255,r:3},{w:255,r:3},{w:255,r:3},{w:255,r:3},{w:255,r:3}] },
+        { tier: "T2", exercise: "Zercher Squat", key: "zercherSquat_T2", sets: [{w:45,r:8},{w:65,r:8},{w:95,r:8}], note: "ramp-up sets, new lift" }
+      ]
+    },
+    { id: "seed2", date: "2026-08-10", cycleDay: 7, dayName: "OHP Day", sourceLabel: "Evening Workout — imported from Strong",
+      entries: [
+        { tier: "T1", exercise: "Overhead Press", key: "ohp_T1", sets: [{w:85,r:4},{w:85,r:3},{w:85,r:3},{w:85,r:3},{w:85,r:3}] },
+        { tier: "T2", exercise: "Incline Bench Press (Dumbbell)", key: "closeGripBench_T2", sets: [{w:40,r:7},{w:40,r:6},{w:40,r:7}], note: "logged in place of Close-Grip Bench Press" },
+        { tier: "Other", exercise: "Incline Prone Y-Raise", sets: [{w:5,r:15},{w:5,r:12},{w:5,r:12}] }
+      ]
+    },
+    { id: "seed3", date: "2026-08-12", cycleDay: 1, dayName: "Squat Day", sourceLabel: "Day 1 (Squat/Bench) — imported from Strong",
+      entries: [
+        { tier: "Other", exercise: "Unilateral Leg Extension", sets: [{w:105,r:12},{w:105,r:12}] },
+        { tier: "T1", exercise: "Front Squat", key: "frontSquat_T1", sets: [{w:165,r:2},{w:165,r:2},{w:165,r:2},{w:165,r:2},{w:165,r:2},{w:165,r:2}] },
+        { tier: "T2", exercise: "Incline Bench Press", key: "benchPress_T2", sets: [{w:135,r:8},{w:135,r:8},{w:135,r:5}], note: "logged in place of Bench Press" }
+      ]
+    },
+    { id: "seed4", date: "2026-08-14", cycleDay: 3, dayName: "Bench Day", sourceLabel: "Day 2 (Bench/Deadlift) — imported from Strong",
+      entries: [
+        { tier: "T1", exercise: "Incline Bench Press", key: "inclineBench_T1", sets: [{w:165,r:2},{w:165,r:2},{w:165,r:2},{w:165,r:2},{w:165,r:2},{w:165,r:1}] },
+        { tier: "T2", exercise: "Trap Bar Deadlift", key: "trapBarDeadlift_T2", sets: [{w:185,r:8},{w:185,r:8},{w:185,r:8}] },
+        { tier: "Other", exercise: "Preacher Curl (Machine)", sets: [{w:80,r:15},{w:80,r:10}] }
+      ]
+    }
+  ];
+  return s;
+}
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { console.warn("load failed", e); }
+  const seeded = seedState();
+  save(seeded);
+  return seeded;
+}
+function save(s) {
+  const target = s || state;
+  target.updatedAt = Date.now();
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(target)); } catch (e) { console.warn("save failed", e); }
+  scheduleAutoSync();
+}
+function exName(key, fallback) {
+  return (state.exerciseNameOverride && state.exerciseNameOverride[key]) || fallback;
+}
+
+/* ============================== GOOGLE DRIVE SYNC ============================== */
+function loadSyncCfg() {
+  try { const raw = localStorage.getItem(SYNC_KEY); if (raw) return JSON.parse(raw); } catch (e) { /* ignore */ }
+  return { clientId: "", fileId: null, lastSyncedAt: null, autoSync: true };
+}
+function saveSyncCfg() { try { localStorage.setItem(SYNC_KEY, JSON.stringify(syncCfg)); } catch (e) { /* ignore */ } }
+
+function updateSyncIndicator() {
+  const dot = document.getElementById("syncDot");
+  const text = document.getElementById("syncText");
+  if (!dot || !text) return;
+  dot.classList.remove("on", "busy");
+  if (syncStatus.busy) { dot.classList.add("busy"); text.textContent = "syncing…"; }
+  else if (syncStatus.connected) {
+    dot.classList.add("on");
+    text.textContent = syncCfg.lastSyncedAt ? "synced " + timeAgo(syncCfg.lastSyncedAt) : "connected";
+  } else {
+    text.textContent = syncCfg.clientId ? "not connected" : "sync off";
+  }
+}
+function timeAgo(ts) {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+}
+
+function waitForGoogle(cb, tries) {
+  tries = tries === undefined ? 24 : tries;
+  if (window.google && google.accounts && google.accounts.oauth2) cb();
+  else if (tries > 0) setTimeout(() => waitForGoogle(cb, tries - 1), 250);
+}
+
+function ensureTokenClient() {
+  if (!window.google || !google.accounts || !google.accounts.oauth2) return null;
+  if (!syncCfg.clientId) return null;
+  if (tokenClient && tokenClient.__clientId === syncCfg.clientId) return tokenClient;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: syncCfg.clientId,
+    scope: DRIVE_SCOPE,
+    callback: () => {}
+  });
+  tokenClient.__clientId = syncCfg.clientId;
+  return tokenClient;
+}
+
+function requestDriveToken(promptMode) {
+  return new Promise((resolve, reject) => {
+    const client = ensureTokenClient();
+    if (!client) { reject(new Error("Paste your Google Client ID first.")); return; }
+    client.callback = (resp) => {
+      if (resp && resp.error) { reject(new Error(resp.error)); return; }
+      driveAccessToken = resp.access_token;
+      resolve(driveAccessToken);
+    };
+    client.error_callback = (err) => { reject(new Error((err && err.type) || "auth failed")); };
+    client.requestAccessToken({ prompt: promptMode === undefined ? "" : promptMode });
+  });
+}
+
+async function driveFetch(url, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers, { Authorization: "Bearer " + driveAccessToken });
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error("Drive error " + res.status + ": " + text.slice(0, 180));
+  }
+  return res;
+}
+
+async function driveFindFile() {
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,modifiedTime)`);
+  const data = await res.json();
+  return (data.files && data.files[0]) || null;
+}
+
+async function driveDownload(fileId) {
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  return res.json();
+}
+
+async function driveUpload(fileId, obj) {
+  const boundary = "gzclsyncboundary";
+  const metadata = fileId ? {} : { name: DRIVE_FILE_NAME, mimeType: "application/json" };
+  const body =
+    "--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) +
+    "\r\n--" + boundary + "\r\nContent-Type: application/json\r\n\r\n" + JSON.stringify(obj) +
+    "\r\n--" + boundary + "--";
+  const url = fileId
+    ? "https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=multipart"
+    : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+  const res = await driveFetch(url, {
+    method: fileId ? "PATCH" : "POST",
+    headers: { "Content-Type": "multipart/related; boundary=" + boundary },
+    body
+  });
+  return res.json();
+}
+
+async function pushToDrive() {
+  const result = await driveUpload(syncCfg.fileId, state);
+  if (result && result.id) syncCfg.fileId = result.id;
+  syncCfg.lastSyncedAt = Date.now();
+  saveSyncCfg();
+  updateSyncIndicator();
+}
+
+async function syncPullThenPush() {
+  syncStatus.busy = true; updateSyncIndicator();
+  try {
+    let file = syncCfg.fileId ? { id: syncCfg.fileId } : await driveFindFile();
+    if (file) {
+      syncCfg.fileId = file.id;
+      const remote = await driveDownload(file.id);
+      if (remote && remote.updatedAt && (!state.updatedAt || remote.updatedAt > state.updatedAt)) {
+        state = remote;
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+      } else {
+        await pushToDrive();
+      }
+    } else {
+      await pushToDrive();
+    }
+    syncCfg.lastSyncedAt = Date.now();
+    saveSyncCfg();
+  } finally {
+    syncStatus.busy = false;
+    updateSyncIndicator();
+  }
+}
+
+function scheduleAutoSync() {
+  if (!syncCfg || !syncCfg.autoSync || !syncCfg.clientId || !driveAccessToken) return;
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(() => {
+    syncStatus.busy = true; updateSyncIndicator();
+    pushToDrive().catch(e => { syncStatus.lastError = e.message; }).finally(() => { syncStatus.busy = false; updateSyncIndicator(); });
+  }, 1500);
+}
+
+async function connectDrive() {
+  if (!syncCfg.clientId) { toast("Paste your Google Client ID first."); return; }
+  syncStatus.busy = true; updateSyncIndicator();
+  try {
+    await requestDriveToken("consent");
+    syncStatus.connected = true;
+    syncStatus.lastError = null;
+    await syncPullThenPush();
+    render();
+    toast("Connected to Google Drive");
+  } catch (e) {
+    syncStatus.lastError = e.message;
+    toast("Couldn't connect: " + e.message);
+  } finally {
+    syncStatus.busy = false;
+    updateSyncIndicator();
+  }
+}
+
+async function manualSyncNow() {
+  if (!driveAccessToken) { connectDrive(); return; }
+  syncStatus.busy = true; updateSyncIndicator();
+  try {
+    await syncPullThenPush();
+    render();
+    toast("Synced");
+  } catch (e) {
+    syncStatus.lastError = e.message;
+    toast("Sync failed: " + e.message);
+  } finally {
+    syncStatus.busy = false; updateSyncIndicator();
+  }
+}
+
+function attemptSilentConnect() {
+  if (!syncCfg.clientId) return;
+  waitForGoogle(() => {
+    requestDriveToken("").then(() => {
+      syncStatus.connected = true;
+      return syncPullThenPush();
+    }).then(() => { render(); }).catch(() => { updateSyncIndicator(); });
+  });
+}
+
+/* ============================== UTIL ============================== */
+function round5(n) { return Math.round(n / 5) * 5; }
+function fmtDate(iso) {
+  const d = new Date(iso + "T12:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._h);
+  toast._h = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+/* ============================== TABS ============================== */
+let activeTab = "today";
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-tab]");
+  if (!btn) return;
+  activeTab = btn.dataset.tab;
+  render();
+});
+
+function render() {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === activeTab));
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  if (activeTab === "today") main.appendChild(renderToday());
+  else if (activeTab === "history") main.appendChild(renderHistory());
+  else if (activeTab === "progress") main.appendChild(renderProgress());
+  else if (activeTab === "program") main.appendChild(renderProgram());
+  else if (activeTab === "settings") main.appendChild(renderSettings());
+  updateSyncIndicator();
+}
+
+/* ============================== TODAY TAB ============================== */
+function el(tag, attrs, children) {
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs) {
+    if (k === "class") e.className = attrs[k];
+    else if (k === "html") e.innerHTML = attrs[k];
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  (children || []).forEach(c => { if (c) e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+  return e;
+}
+
+function renderToday() {
+  const wrapper = document.createElement("div");
+  const day = PROGRAM[state.cycleDay];
+
+  // deload banner
+  if (state.cyclesCompleted > 0 && state.cyclesCompleted % state.deloadEvery === 0 && state.lastDeloadAtCycle !== state.cyclesCompleted) {
+    wrapper.appendChild(el("div", { class: "banner" }, [
+      el("div", {}, [
+        el("b", {}, ["Deload window"]),
+        "You've completed " + state.cyclesCompleted + " full cycles. Consider cutting T1/T2 volume ~40% and dropping most T3 (or 1 light set each) this cycle."
+      ])
+    ]));
+  }
+
+  const card = el("div", { class: "card" });
+
+  // day picker
+  const picker = el("div", { class: "daypicker" }, [
+    el("span", { class: "pill" }, ["Cycle Day " + state.cycleDay + " / 8"]),
+    (() => {
+      const sel = el("select", { onchange: (e) => { state.cycleDay = Number(e.target.value); save(); render(); } });
+      for (let i = 1; i <= 8; i++) {
+        const opt = el("option", { value: i }, ["Day " + i + " — " + PROGRAM[i].name]);
+        if (i === state.cycleDay) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      return sel;
+    })()
+  ]);
+  card.appendChild(picker);
+  card.appendChild(el("h2", {}, [day.name]));
+
+  let cardioNotesInput = null;
+  if (day.type === "cardio") {
+    card.appendChild(el("div", { class: "walkbox" }, [
+      el("div", {}, day.protocol.map(p => el("div", {}, ["• " + p]))),
+    ]));
+    if (day.why) card.appendChild(el("div", { class: "muted" }, [day.why]));
+    card.appendChild(el("h3", {}, ["Notes (optional)"]));
+    cardioNotesInput = el("input", { type: "text", placeholder: "e.g. duration, intervals completed, RPE", style: "width:100%; font:inherit; padding:9px 10px; border-radius:8px; border:1px solid var(--border); background:var(--page-plane); color:var(--text-primary);" });
+    card.appendChild(cardioNotesInput);
+  }
+
+  if (day.type === "walk3") {
+    card.appendChild(el("div", { class: "walkbox" }, [ el("b", {}, ["Incline Walk: "]), day.walk ]));
+  }
+
+  const container = document.createElement("div");
+  const setInputsByKey = {};
+
+  if (day.type === "lift" || day.type === "walk3") {
+    day.tiers.forEach(tierDef => {
+      if (tierDef.group) {
+        tierDef.group.forEach(item => {
+          container.appendChild(renderT3Block(item, setInputsByKey));
+        });
+      } else {
+        container.appendChild(renderLiftBlock(tierDef, setInputsByKey));
+      }
+    });
+    if (day.t3note) container.appendChild(el("div", { class: "muted" }, [day.t3note]));
+  }
+  card.appendChild(container);
+
+  const saveBtn = el("button", { class: "primary", onclick: () => saveSession(day, setInputsByKey, cardioNotesInput) }, ["Save & Complete Day " + state.cycleDay]);
+  card.appendChild(saveBtn);
+
+  wrapper.appendChild(card);
+  return wrapper;
+}
+
+function renderLiftBlock(tierDef, setInputsByKey) {
+  const block = el("div", { class: "exblock" });
+  const name = exName(tierDef.key, tierDef.exercise);
+  const head = el("div", { class: "exhead" }, [
+    el("div", { class: "exname" }, [
+      (() => { const i = el("input", { value: name }); i.addEventListener("change", (e) => { setExerciseName(tierDef.key, e.target.value); }); return i; })()
+    ]),
+    el("span", { class: "pill" }, [tierDef.tier])
+  ]);
+  block.appendChild(head);
+
+  let targetSets = [];
+  let metaText = "";
+
+  if (tierDef.scheme === "wave") {
+    const st = state.t1[tierDef.key];
+    const wv = T1_WAVE[st.wave - 1];
+    const suggested = round5(st.trainingMax * wv.pctMid);
+    metaText = "T1 · wave week " + wv.week + "/3 · " + wv.setsLabel + " @ " + wv.pctLabel + " (training max " + st.trainingMax + " lb)";
+    for (let i = 0; i < wv.sets; i++) targetSets.push({ w: suggested, r: wv.reps });
+  } else if (tierDef.scheme === "double") {
+    const st = state.t2[tierDef.key];
+    metaText = "T2 · " + tierDef.repRange[0] + "–" + tierDef.repRange[1] + " reps @ " + tierDef.pct + (st.ramping ? " · ramping — build working weight within session" : "");
+    for (let i = 0; i < 3; i++) targetSets.push({ w: st.weight, r: st.repTarget });
+  }
+  block.appendChild(el("div", { class: "exmeta" }, [metaText]));
+  if (tierDef.note) block.appendChild(el("div", { class: "exmeta flag" }, [tierDef.note]));
+
+  const setGrid = el("div", { class: "setgrid" });
+  const rows = [];
+  function addRow(preset) {
+    const idx = rows.length + 1;
+    const wInput = el("input", { type: "number", inputmode: "decimal", placeholder: "lb", value: preset ? preset.w || "" : "" });
+    const rInput = el("input", { type: "number", inputmode: "numeric", placeholder: "reps", value: preset ? preset.r || "" : "" });
+    const row = el("div", { class: "setrow" }, [
+      el("span", { class: "setno" }, [String(idx)]),
+      wInput, el("span", { class: "x" }, ["×"]), rInput,
+      el("button", { class: "rm", title: "Remove set", onclick: () => { row.remove(); rows.splice(rows.indexOf(row), 1); renumber(); } }, ["✕"])
+    ]);
+    rows.push(row);
+    setGrid.appendChild(row);
+    return row;
+  }
+  function renumber() { rows.forEach((r, i) => { r.querySelector(".setno").textContent = String(i + 1); }); }
+  targetSets.forEach(t => addRow(t));
+  block.appendChild(setGrid);
+  block.appendChild(el("button", { class: "addset", onclick: () => addRow() }, ["+ Add set"]));
+
+  setInputsByKey[tierDef.key] = { tier: tierDef.tier, exercise: name, getSets: () => rows.map(r => {
+    const inputs = r.querySelectorAll("input");
+    return { w: Number(inputs[0].value) || 0, r: Number(inputs[1].value) || 0 };
+  }).filter(s => s.w || s.r) };
+
+  return block;
+}
+
+function renderT3Block(item, setInputsByKey) {
+  const block = el("div", { class: "exblock" });
+  const name = exName(item.key, item.exercise);
+  const head = el("div", { class: "exhead" }, [
+    el("div", { class: "exname" }, [
+      (() => { const i = el("input", { value: name }); i.addEventListener("change", (e) => { setExerciseName(item.key, e.target.value); }); return i; })()
+    ]),
+    el("span", { class: "pill" }, ["T3"])
+  ]);
+  block.appendChild(head);
+  const last = state.t3[item.key];
+  const rangeLabel = item.repsLabel || (item.repRange[0] + "–" + item.repRange[1] + " reps");
+  block.appendChild(el("div", { class: "exmeta" }, [
+    "T3 · " + item.sets + " sets × " + rangeLabel + (last ? " · last: " + last.weight + " lb × " + last.reps : "")
+  ]));
+
+  const setGrid = el("div", { class: "setgrid" });
+  const rows = [];
+  function addRow(preset) {
+    const idx = rows.length + 1;
+    const wInput = el("input", { type: "number", inputmode: "decimal", placeholder: "lb", value: preset ? preset.w : (last ? last.weight : "") });
+    const rInput = el("input", { type: "number", inputmode: "numeric", placeholder: "reps", value: preset ? preset.r : "" });
+    const row = el("div", { class: "setrow" }, [
+      el("span", { class: "setno" }, [String(idx)]),
+      wInput, el("span", { class: "x" }, ["×"]), rInput,
+      el("button", { class: "rm", onclick: () => { row.remove(); rows.splice(rows.indexOf(row), 1); renumber(); } }, ["✕"])
+    ]);
+    rows.push(row);
+    setGrid.appendChild(row);
+    return row;
+  }
+  function renumber() { rows.forEach((r, i) => { r.querySelector(".setno").textContent = String(i + 1); }); }
+  for (let i = 0; i < item.sets; i++) addRow();
+  block.appendChild(setGrid);
+  block.appendChild(el("button", { class: "addset", onclick: () => addRow() }, ["+ Add set"]));
+
+  setInputsByKey[item.key] = { tier: "T3", exercise: name, getSets: () => rows.map(r => {
+    const inputs = r.querySelectorAll("input");
+    return { w: Number(inputs[0].value) || 0, r: Number(inputs[1].value) || 0 };
+  }).filter(s => s.w || s.r) };
+
+  return block;
+}
+
+function setExerciseName(key, value) {
+  state.exerciseNameOverride[key] = value;
+  save();
+}
+
+function saveSession(day, setInputsByKey, cardioNotesInput) {
+  const entries = [];
+  Object.keys(setInputsByKey).forEach(key => {
+    const rec = setInputsByKey[key];
+    const sets = rec.getSets();
+    if (sets.length) entries.push({ tier: rec.tier, exercise: rec.exercise, key, sets });
+  });
+
+  const cardioNotes = cardioNotesInput ? cardioNotesInput.value.trim() : "";
+  if (cardioNotes) entries.push({ tier: "Other", exercise: day.name, sets: [], note: cardioNotes });
+
+  if (!entries.length && day.type === "lift") {
+    toast("Nothing logged yet — add at least one set.");
+    return;
+  }
+
+  if (entries.length) {
+    const logEntry = { id: "log_" + Date.now(), date: todayISO(), cycleDay: state.cycleDay, dayName: day.name, entries };
+    state.logs.push(logEntry);
+
+    entries.forEach(en => {
+      if (T1_KEYS.includes(en.key)) updateT1Progress(en.key, en.sets);
+      else if (state.t2[en.key]) updateT2Progress(en.key, en.sets);
+      else if (en.key && en.sets.length) {
+        // T3 or other tracked exercise — remember last set
+        const last = en.sets[en.sets.length - 1];
+        state.t3[en.key] = { weight: last.w, reps: last.r };
+      }
+    });
+  }
+
+  // advance cycle day
+  const prevDay = state.cycleDay;
+  state.cycleDay = prevDay === 8 ? 1 : prevDay + 1;
+  if (prevDay === 8) state.cyclesCompleted += 1;
+
+  save();
+  toast("Day " + prevDay + " complete — on to Day " + state.cycleDay);
+  render();
+}
+
+function updateT1Progress(key, sets) {
+  const st = state.t1[key];
+  if (st.wave >= 3) { st.trainingMax = st.trainingMax + 5; st.wave = 1; }
+  else { st.wave += 1; }
+}
+
+function updateT2Progress(key, sets) {
+  const st = state.t2[key];
+  const cfg = findT2Config(key);
+  if (!cfg) return;
+  const minReps = Math.min(...sets.map(s => s.r));
+  if (minReps >= cfg.repRange[1]) {
+    st.weight = st.weight + 5;
+    st.repTarget = cfg.repRange[0];
+    st.ramping = false;
+  } else {
+    st.repTarget = Math.min(cfg.repRange[1], Math.max(st.repTarget, minReps) + 1);
+  }
+}
+
+function findT2Config(key) {
+  for (const d in PROGRAM) {
+    const day = PROGRAM[d];
+    if (!day.tiers) continue;
+    for (const t of day.tiers) {
+      if (t.key === key) return t;
+    }
+  }
+  return null;
+}
+
+/* ============================== HISTORY TAB ============================== */
+function renderHistory() {
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h2", {}, ["Session History"]));
+  const logs = [...state.logs].reverse();
+  if (!logs.length) {
+    card.appendChild(el("div", { class: "empty" }, ["No sessions logged yet."]));
+    return card;
+  }
+  logs.forEach(log => {
+    const item = el("div", { class: "histitem" });
+    item.appendChild(el("div", { class: "hd" }, [
+      el("span", {}, [log.dayName]),
+      el("span", { class: "date" }, [fmtDate(log.date)])
+    ]));
+    if (log.sourceLabel) item.appendChild(el("div", { class: "muted" }, [log.sourceLabel]));
+    const ul = el("ul", {});
+    log.entries.forEach(en => {
+      const setsStr = en.sets.map(s => s.w + "×" + s.r).join(", ");
+      const prefix = (en.tier !== "Other" ? "[" + en.tier + "] " : "") + en.exercise;
+      const body = setsStr ? " — " + setsStr : "";
+      const noteStr = en.note ? (setsStr ? " (" + en.note + ")" : " — " + en.note) : "";
+      ul.appendChild(el("li", {}, [prefix + body + noteStr]));
+    });
+    item.appendChild(ul);
+    card.appendChild(item);
+  });
+  return card;
+}
+
+/* ============================== PROGRESS TAB (charts) ============================== */
+function sessionVolume(log) {
+  let vol = 0;
+  log.entries.forEach(en => en.sets.forEach(s => { vol += (s.w || 0) * (s.r || 0); }));
+  return vol;
+}
+
+function topSetByKey(log, key) {
+  const en = log.entries.find(e => e.key === key);
+  if (!en || !en.sets.length) return null;
+  return Math.max(...en.sets.map(s => s.w));
+}
+
+function renderProgress() {
+  const wrap = document.createElement("div");
+
+  // Chart 1: T1 top-set weight over time
+  const c1 = el("div", { class: "card" });
+  c1.appendChild(el("h2", {}, ["T1 Top-Set Weight"]));
+  c1.appendChild(el("div", { class: "muted" }, ["Heaviest set logged per main lift, by session date."]));
+  const series1 = T1_KEYS.map(key => {
+    const pts = state.logs
+      .filter(l => l.entries.some(e => e.key === key))
+      .map(l => ({ x: l.date, y: topSetByKey(l, key) }))
+      .filter(p => p.y != null);
+    return { key, label: exName(key, T1_LABELS[key]), color: T1_COLORS[key], points: pts };
+  }).filter(s => s.points.length);
+  c1.appendChild(series1.length ? lineChart(series1) : el("div", { class: "empty" }, ["Log a T1 lift to see trends here."]));
+  wrap.appendChild(c1);
+
+  // Chart 2: session volume over time
+  const c2 = el("div", { class: "card" });
+  c2.appendChild(el("h2", {}, ["Session Volume"]));
+  c2.appendChild(el("div", { class: "muted" }, ["Total weight × reps logged per session."]));
+  const barPts = [...state.logs].sort((a,b) => a.date.localeCompare(b.date)).map(l => ({ x: l.date, y: sessionVolume(l), label: l.dayName }));
+  c2.appendChild(barPts.length ? barChart(barPts) : el("div", { class: "empty" }, ["Log a session to see volume here."]));
+  wrap.appendChild(c2);
+
+  // Chart 3: training max progress
+  const c3 = el("div", { class: "card" });
+  c3.appendChild(el("h2", {}, ["Current Training Maxes"]));
+  const tbl = el("table", { class: "settbl" }, [
+    el("tr", {}, [el("th", {}, ["Lift"]), el("th", {}, ["Training Max"]), el("th", {}, ["Wave Week"])])
+  ]);
+  T1_KEYS.forEach(key => {
+    const st = state.t1[key];
+    tbl.appendChild(el("tr", {}, [
+      el("td", {}, [exName(key, T1_LABELS[key])]),
+      el("td", {}, [st.trainingMax + " lb"]),
+      el("td", {}, [st.wave + " / 3"])
+    ]));
+  });
+  c3.appendChild(tbl);
+  wrap.appendChild(c3);
+
+  return wrap;
+}
+
+function svgNS(tag) { return document.createElementNS("http://www.w3.org/2000/svg", tag); }
+
+function chartScales(allX, allY, w, h, padL, padR, padT, padB) {
+  const xs = [...new Set(allX)].sort();
+  const minY = 0, maxY = Math.max(1, ...allY) * 1.15;
+  const xFor = (v) => padL + (xs.length <= 1 ? (w - padL - padR) / 2 : (xs.indexOf(v) / (xs.length - 1)) * (w - padL - padR));
+  const yFor = (v) => h - padB - ((v - minY) / (maxY - minY)) * (h - padT - padB);
+  return { xs, xFor, yFor, maxY };
+}
+
+function lineChart(series) {
+  const wrap = el("div", { class: "chartwrap" });
+  const w = 560, h = 220, padL = 34, padR = 10, padT = 14, padB = 26;
+  const allX = series.flatMap(s => s.points.map(p => p.x));
+  const allY = series.flatMap(s => s.points.map(p => p.y));
+  const { xs, xFor, yFor, maxY } = chartScales(allX, allY, w, h, padL, padR, padT, padB);
+
+  const svg = svgNS("svg");
+  svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+  svg.setAttribute("width", "100%");
+  svg.style.display = "block";
+
+  // gridlines
+  const gridColor = getComputedStyle(document.body).getPropertyValue("--gridline").trim() || "#e1e0d9";
+  const baseColor = getComputedStyle(document.body).getPropertyValue("--baseline").trim() || "#c3c2b7";
+  const mutedColor = getComputedStyle(document.body).getPropertyValue("--text-muted").trim() || "#898781";
+  for (let i = 0; i <= 3; i++) {
+    const y = padT + (i / 3) * (h - padT - padB);
+    const gl = svgNS("line");
+    gl.setAttribute("x1", padL); gl.setAttribute("x2", w - padR);
+    gl.setAttribute("y1", y); gl.setAttribute("y2", y);
+    gl.setAttribute("stroke", gridColor); gl.setAttribute("stroke-width", "1");
+    svg.appendChild(gl);
+    const val = Math.round(maxY * (1 - i / 3));
+    const lbl = svgNS("text");
+    lbl.setAttribute("x", padL - 6); lbl.setAttribute("y", y + 3);
+    lbl.setAttribute("text-anchor", "end"); lbl.setAttribute("font-size", "9.5");
+    lbl.setAttribute("fill", mutedColor);
+    lbl.textContent = val;
+    svg.appendChild(lbl);
+  }
+  // baseline
+  const base = svgNS("line");
+  base.setAttribute("x1", padL); base.setAttribute("x2", w - padR);
+  base.setAttribute("y1", h - padB); base.setAttribute("y2", h - padB);
+  base.setAttribute("stroke", baseColor); base.setAttribute("stroke-width", "1");
+  svg.appendChild(base);
+
+  const tooltip = el("div", { class: "tooltip" });
+
+  series.forEach(s => {
+    const colorVal = resolveVar(s.color);
+    if (s.points.length === 1) {
+      const p = s.points[0];
+      const c = svgNS("circle");
+      c.setAttribute("cx", xFor(p.x)); c.setAttribute("cy", yFor(p.y)); c.setAttribute("r", 4);
+      c.setAttribute("fill", colorVal);
+      addHover(c, tooltip, s.label + " · " + fmtDate(p.x) + " · " + p.y + " lb");
+      svg.appendChild(c);
+    } else {
+      const path = svgNS("path");
+      const d = s.points.map((p, i) => (i === 0 ? "M" : "L") + xFor(p.x) + "," + yFor(p.y)).join(" ");
+      path.setAttribute("d", d);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", colorVal);
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("stroke-linejoin", "round");
+      svg.appendChild(path);
+      s.points.forEach(p => {
+        const c = svgNS("circle");
+        c.setAttribute("cx", xFor(p.x)); c.setAttribute("cy", yFor(p.y)); c.setAttribute("r", 4);
+        c.setAttribute("fill", colorVal);
+        addHover(c, tooltip, s.label + " · " + fmtDate(p.x) + " · " + p.y + " lb");
+        svg.appendChild(c);
+      });
+    }
+  });
+
+  wrap.appendChild(svg);
+  wrap.appendChild(tooltip);
+
+  const legend = el("div", { class: "chartlegend" });
+  series.forEach(s => {
+    legend.appendChild(el("span", { class: "li" }, [
+      el("span", { class: "sw", style: "background:" + resolveVar(s.color) }),
+      s.label
+    ]));
+  });
+  wrap.appendChild(legend);
+
+  function addHover(node, tooltipEl, text) {
+    node.addEventListener("mouseenter", (e) => showTip(e));
+    node.addEventListener("mousemove", (e) => showTip(e));
+    node.addEventListener("mouseleave", () => { tooltipEl.style.opacity = 0; });
+    node.addEventListener("touchstart", (e) => showTip(e.touches[0]));
+    function showTip(e) {
+      const rect = wrap.getBoundingClientRect();
+      tooltipEl.textContent = text;
+      tooltipEl.style.left = (node.getAttribute("cx") / w) * rect.width + "px";
+      tooltipEl.style.top = (node.getAttribute("cy") / h) * rect.height + "px";
+      tooltipEl.style.opacity = 1;
+    }
+  }
+  return wrap;
+}
+
+function barChart(points) {
+  const wrap = el("div", { class: "chartwrap" });
+  const w = 560, h = 220, padL = 40, padR = 10, padT = 14, padB = 34;
+  const allX = points.map(p => p.x);
+  const allY = points.map(p => p.y);
+  const { xs, xFor, yFor, maxY } = chartScales(allX, allY, w, h, padL, padR, padT, padB);
+  const svg = svgNS("svg");
+  svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+  svg.setAttribute("width", "100%");
+  svg.style.display = "block";
+
+  const gridColor = getComputedStyle(document.body).getPropertyValue("--gridline").trim() || "#e1e0d9";
+  const mutedColor = getComputedStyle(document.body).getPropertyValue("--text-muted").trim() || "#898781";
+  const seriesColor = resolveVar("var(--series-1)");
+
+  for (let i = 0; i <= 3; i++) {
+    const y = padT + (i / 3) * (h - padT - padB);
+    const gl = svgNS("line");
+    gl.setAttribute("x1", padL); gl.setAttribute("x2", w - padR);
+    gl.setAttribute("y1", y); gl.setAttribute("y2", y);
+    gl.setAttribute("stroke", gridColor); gl.setAttribute("stroke-width", "1");
+    svg.appendChild(gl);
+    const val = Math.round(maxY * (1 - i / 3));
+    const lbl = svgNS("text");
+    lbl.setAttribute("x", padL - 6); lbl.setAttribute("y", y + 3);
+    lbl.setAttribute("text-anchor", "end"); lbl.setAttribute("font-size", "9.5");
+    lbl.setAttribute("fill", mutedColor);
+    lbl.textContent = val;
+    svg.appendChild(lbl);
+  }
+
+  const tooltip = el("div", { class: "tooltip" });
+  const bw = Math.max(10, Math.min(38, (w - padL - padR) / Math.max(1, xs.length) - 8));
+  points.forEach(p => {
+    const cx = xFor(p.x);
+    const yTop = yFor(p.y);
+    const rect = svgNS("rect");
+    rect.setAttribute("x", cx - bw / 2);
+    rect.setAttribute("y", yTop);
+    rect.setAttribute("width", bw);
+    rect.setAttribute("height", Math.max(0, h - padB - yTop));
+    rect.setAttribute("rx", 4);
+    rect.setAttribute("fill", seriesColor);
+    svg.appendChild(rect);
+    const label = svgNS("text");
+    label.setAttribute("x", cx); label.setAttribute("y", h - padB + 14);
+    label.setAttribute("text-anchor", "middle"); label.setAttribute("font-size", "8.5");
+    label.setAttribute("fill", mutedColor);
+    const d = new Date(p.x + "T12:00:00");
+    label.textContent = (d.getMonth()+1) + "/" + d.getDate();
+    svg.appendChild(label);
+
+    rect.addEventListener("mouseenter", () => showTip());
+    rect.addEventListener("mousemove", () => showTip());
+    rect.addEventListener("mouseleave", () => { tooltip.style.opacity = 0; });
+    function showTip() {
+      const b = wrap.getBoundingClientRect();
+      tooltip.textContent = (p.label || "") + " · " + fmtDate(p.x) + " · " + Math.round(p.y).toLocaleString() + " lb total";
+      tooltip.style.left = (cx / w) * b.width + "px";
+      tooltip.style.top = (yTop / h) * b.height + "px";
+      tooltip.style.opacity = 1;
+    }
+  });
+
+  wrap.appendChild(svg);
+  wrap.appendChild(tooltip);
+  return wrap;
+}
+
+function resolveVar(v) {
+  if (!v.startsWith("var(")) return v;
+  const name = v.slice(4, -1).trim();
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+
+/* ============================== PROGRAM TAB ============================== */
+function renderProgram() {
+  const wrap = document.createElement("div");
+  wrap.appendChild(el("div", { class: "card" }, [
+    el("h2", {}, ["My GZCL Method Workout Plan"]),
+    el("div", { class: "secondary" }, ["Every-Other-Day Cycle · Balanced strength + size, plus aerobic/conditioning base"]),
+    el("h3", {}, ["Tiers"]),
+    el("table", { class: "settbl" }, [
+      el("tr", {}, [el("th",{},["Tier"]), el("th",{},["Purpose"]), el("th",{},["Intensity"]), el("th",{},["Reps"]), el("th",{},["Sets"])]),
+      el("tr", {}, [el("td",{},["T1"]), el("td",{},["Main lift"]), el("td",{},["80–95%"]), el("td",{},["1–3"]), el("td",{},["4–6"])]),
+      el("tr", {}, [el("td",{},["T2"]), el("td",{},["Secondary lift"]), el("td",{},["65–85%"]), el("td",{},["6–10"]), el("td",{},["3–5"])]),
+      el("tr", {}, [el("td",{},["T3"]), el("td",{},["Accessories"]), el("td",{},["RPE-based"]), el("td",{},["10–20"]), el("td",{},["2–4"])])
+    ]),
+    el("h3", {}, ["Progression"]),
+    el("div", { class: "secondary" }, ["T1: 3-week wave (5x3 → 6x2 → 8-10x1), then +5–10 lb and restart at week 1."]),
+    el("div", { class: "secondary" }, ["T2 & T3: double progression — add a rep each session until all sets hit the top of the range, then add weight and drop back to the bottom."]),
+    el("h3", {}, ["Deload"]),
+    el("div", { class: "secondary" }, ["Every 5th–6th cycle (or when beat up): cut T1/T2 volume ~40%, drop most T3 or cut to 1 light set each."])
+  ]));
+
+  for (let i = 1; i <= 8; i++) {
+    const day = PROGRAM[i];
+    const c = el("div", { class: "card" });
+    c.appendChild(el("h2", {}, ["Day " + i + " — " + day.name]));
+    if (day.type === "cardio") {
+      day.protocol.forEach(p => c.appendChild(el("div", { class: "secondary" }, ["• " + p])));
+    } else if (day.type === "lift" || day.type === "walk3") {
+      if (day.walk) c.appendChild(el("div", { class: "secondary" }, ["Walk: " + day.walk]));
+      day.tiers.forEach(t => {
+        if (t.group) {
+          t.group.forEach(item => {
+            c.appendChild(el("div", { class: "secondary" }, [
+              "T3 — " + exName(item.key, item.exercise) + ": " + item.sets + "x" + (item.repsLabel || (item.repRange[0] + "–" + item.repRange[1]))
+            ]));
+          });
+        } else if (t.scheme === "wave") {
+          c.appendChild(el("div", { class: "secondary" }, ["T1 — " + exName(t.key, t.exercise) + ": wave progression (see above)"]));
+        } else {
+          c.appendChild(el("div", { class: "secondary" }, [
+            "T2 — " + exName(t.key, t.exercise) + ": 3 sets × " + t.repRange[0] + "–" + t.repRange[1] + " @ " + t.pct
+          ]));
+          if (t.note) c.appendChild(el("div", { class: "muted" }, [t.note]));
+        }
+      });
+      if (day.t3note) c.appendChild(el("div", { class: "muted" }, [day.t3note]));
+    }
+    wrap.appendChild(c);
+  }
+  return wrap;
+}
+
+/* ============================== SETTINGS TAB ============================== */
+function renderSettings() {
+  const wrap = document.createElement("div");
+
+  const cSync = el("div", { class: "card" });
+  cSync.appendChild(el("h2", {}, ["Sync — Google Drive"]));
+  cSync.appendChild(el("div", { class: "muted" }, [
+    "Auto-saves your data as a JSON file in your Google Drive so it stays in sync across your devices. Requires a free one-time Google Cloud setup, and this page needs to be hosted at an https:// address (not opened as a local file) for sign-in to work."
+  ]));
+  cSync.appendChild(el("h3", {}, ["Google Client ID"]));
+  const clientIdInput = el("input", { type: "text", placeholder: "xxxx.apps.googleusercontent.com", value: syncCfg.clientId,
+    style: "width:100%; font:inherit; padding:9px 10px; border-radius:8px; border:1px solid var(--border); background:var(--page-plane); color:var(--text-primary);" });
+  clientIdInput.addEventListener("change", (e) => { syncCfg.clientId = e.target.value.trim(); saveSyncCfg(); updateSyncIndicator(); });
+  cSync.appendChild(clientIdInput);
+
+  const statusLine = el("div", { class: "secondary", style: "margin-top:10px;" }, [
+    syncStatus.connected
+      ? "Connected" + (syncCfg.lastSyncedAt ? " · last synced " + timeAgo(syncCfg.lastSyncedAt) : "")
+      : (syncCfg.clientId ? "Not connected yet" : "Paste a Client ID above to enable sync")
+  ]);
+  cSync.appendChild(statusLine);
+  if (syncStatus.lastError) cSync.appendChild(el("div", { class: "muted flag" }, ["Last error: " + syncStatus.lastError]));
+
+  const syncBtnRow = el("div", { class: "backuprow" });
+  syncBtnRow.appendChild(el("button", { class: "secondary2", onclick: connectDrive }, [syncStatus.connected ? "Reconnect" : "Connect Google Drive"]));
+  syncBtnRow.appendChild(el("button", { class: "secondary2", onclick: manualSyncNow }, ["Sync Now"]));
+  cSync.appendChild(syncBtnRow);
+
+  const autoRow = el("div", { style: "display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px;" });
+  const autoCheck = el("input", { type: "checkbox" });
+  autoCheck.checked = !!syncCfg.autoSync;
+  autoCheck.addEventListener("change", (e) => { syncCfg.autoSync = e.target.checked; saveSyncCfg(); });
+  autoRow.appendChild(autoCheck);
+  autoRow.appendChild(el("label", {}, ["Auto-sync to Drive whenever I log a session or change a setting"]));
+  cSync.appendChild(autoRow);
+  wrap.appendChild(cSync);
+
+  const c1 = el("div", { class: "card" });
+  c1.appendChild(el("h2", {}, ["Training Maxes & Wave Week"]));
+  const tbl = el("table", { class: "settbl" }, [
+    el("tr", {}, [el("th",{},["Lift"]), el("th",{},["Training Max"]), el("th",{},["Wave Week"])])
+  ]);
+  T1_KEYS.forEach(key => {
+    const st = state.t1[key];
+    const tmInput = el("input", { type: "number", value: st.trainingMax });
+    tmInput.addEventListener("change", (e) => { st.trainingMax = Number(e.target.value) || 0; save(); });
+    const wkSel = el("select", {});
+    [1,2,3].forEach(w => { const o = el("option", { value: w }, [String(w)]); if (w === st.wave) o.selected = true; wkSel.appendChild(o); });
+    wkSel.addEventListener("change", (e) => { st.wave = Number(e.target.value); save(); });
+    tbl.appendChild(el("tr", {}, [el("td",{},[exName(key, T1_LABELS[key])]), el("td",{},[tmInput]), el("td",{},[wkSel])]));
+  });
+  c1.appendChild(tbl);
+  wrap.appendChild(c1);
+
+  const c2 = el("div", { class: "card" });
+  c2.appendChild(el("h2", {}, ["T2 Working Weights"]));
+  const tbl2 = el("table", { class: "settbl" }, [
+    el("tr", {}, [el("th",{},["Lift"]), el("th",{},["Weight"]), el("th",{},["Rep Target"])])
+  ]);
+  Object.keys(state.t2).forEach(key => {
+    const st = state.t2[key];
+    const cfg = findT2Config(key);
+    const wInput = el("input", { type: "number", value: st.weight });
+    wInput.addEventListener("change", (e) => { st.weight = Number(e.target.value) || 0; save(); });
+    const rInput = el("input", { type: "number", value: st.repTarget });
+    rInput.addEventListener("change", (e) => { st.repTarget = Number(e.target.value) || 0; save(); });
+    tbl2.appendChild(el("tr", {}, [el("td",{},[exName(key, cfg ? cfg.exercise : key)]), el("td",{},[wInput]), el("td",{},[rInput])]));
+  });
+  c2.appendChild(tbl2);
+  wrap.appendChild(c2);
+
+  const c3 = el("div", { class: "card" });
+  c3.appendChild(el("h2", {}, ["Cycle & Deload"]));
+  const row = el("div", { class: "row2" }, [
+    el("div", {}, [
+      el("div", { class: "muted" }, ["Cycles completed"]),
+      (() => { const i = el("input", { type: "number", value: state.cyclesCompleted }); i.addEventListener("change", (e) => { state.cyclesCompleted = Number(e.target.value) || 0; save(); }); return i; })()
+    ]),
+    el("div", {}, [
+      el("div", { class: "muted" }, ["Deload every N cycles"]),
+      (() => { const i = el("input", { type: "number", value: state.deloadEvery }); i.addEventListener("change", (e) => { state.deloadEvery = Number(e.target.value) || 5; save(); }); return i; })()
+    ])
+  ]);
+  c3.appendChild(row);
+  wrap.appendChild(c3);
+
+  const c4 = el("div", { class: "card" });
+  c4.appendChild(el("h2", {}, ["Backup"]));
+  c4.appendChild(el("div", { class: "muted" }, ["Export your data as a JSON file, or restore from a backup."]));
+  const backupRow = el("div", { class: "backuprow" });
+  const exportBtn = el("button", { class: "secondary2", onclick: exportData }, ["Export JSON"]);
+  const importInput = el("input", { type: "file", accept: "application/json", style: "display:none" });
+  importInput.addEventListener("change", importData);
+  const importBtn = el("button", { class: "secondary2", onclick: () => importInput.click() }, ["Import JSON"]);
+  backupRow.appendChild(exportBtn);
+  backupRow.appendChild(importBtn);
+  c4.appendChild(backupRow);
+  c4.appendChild(importInput);
+  wrap.appendChild(c4);
+
+  const c5 = el("div", { class: "card" });
+  c5.appendChild(el("h2", {}, ["Reset"]));
+  c5.appendChild(el("div", { class: "muted" }, ["Wipes all local data on this device and restores the original imported history. This can't be undone."]));
+  c5.appendChild(el("button", { class: "secondary2", onclick: () => { if (confirm("Reset all data on this device?")) { state = seedState(); save(); render(); toast("Reset to imported history"); } } }, ["Reset app data"]));
+  wrap.appendChild(c5);
+
+  return wrap;
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "gzcl-tracker-backup-" + todayISO() + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      state = parsed;
+      save();
+      render();
+      toast("Data imported");
+    } catch (err) {
+      toast("Import failed — invalid file");
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ============================== INIT ============================== */
+render();
+attemptSilentConnect();
+</script>
+</body>
+</html>
